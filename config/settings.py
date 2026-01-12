@@ -2,9 +2,9 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-&h)k7#v@l*6m^q!2p$9z_x+5u(w1r8-j4y0=b3t#i&f1c9s!@'
-DEBUG = True
-ALLOWED_HOSTS = []
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key')
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
+ALLOWED_HOSTS = ['*']
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = 'pos'
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
@@ -54,11 +54,11 @@ TEMPLATES = [
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres',
-        'USER': 'postgres.ahfuseqhicdwmmkrpzpq',
-        'PASSWORD': 'Baochaugreen@2024',
-        'HOST': 'aws-1-ap-southeast-1.pooler.supabase.com',
-        'PORT': '6543',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT', '6543'),
     }
 }
 STATIC_URL = 'static/'
