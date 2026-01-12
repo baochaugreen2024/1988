@@ -1,0 +1,9 @@
+django
+django-unfold
+unidecode
+python-dotenv
+tzdata
+pillow
+openpyxl
+pandas
+psycopg2-binary
