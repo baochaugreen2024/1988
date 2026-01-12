@@ -50,12 +50,16 @@ TEMPLATES = [
 ]
 
 # Sau này nâng lên PostgreSQL chỉ cần sửa đoạn này
+# settings.py
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'invoice_application',
+        'USER': 'postgres',
+        'PASSWORD': '210219',
+        'HOST': 'localhost',
+        'PORT': '5433',
     }
 }
-
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
