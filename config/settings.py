@@ -20,7 +20,8 @@ INSTALLED_APPS = [
     'app_quan_ly',
     'django.contrib.humanize',
 ]
-
+HTML_MINIFY = True
+EXCLUDE_FROM_MINIFYING = ('^admin/',) 
 MIDDLEWARE = [
     'django.middleware.gzip.GZipMiddleware',
     'htmlmin.middleware.HtmlMinifyMiddleware',
