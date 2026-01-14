@@ -1,45 +1,125 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Quản Lý Sản Phẩm | Gemini POS</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Quản Lý Sản Phẩm | Gemini POS{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="max-w-7xl mx-auto p-6" x-data="productManager()">
     <style>
-        [x-cloak] { display: none !important; }
-        body { font-family: 'Inter', sans-serif; }
+        [x-cloak] { 
+            display: none !important; 
+        }
+        
+        /* Modal sẽ được Alpine tự động hiển thị khi x-if="showAddModal" */
+        
+        /* Đảm bảo input trong modal có thể nhập được và có màu chữ đen */
+        [x-ref="addModal"] input:not([disabled]),
+        [x-ref="addModal"] textarea,
+        [x-ref="addModal"] select {
+            color: #1e293b !important;
+            background-color: white !important;
+        }
+        
+        /* Input disabled vẫn có màu */
+        [x-ref="addModal"] input[disabled] {
+            color: #64748b !important;
+            background-color: #f1f5f9 !important;
+        }
+        
+        /* Label trong modal có màu đen */
+        [x-ref="addModal"] label {
+            color: #475569 !important;
+        }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* FORCE màu chữ đen cho tất cả nội dung trong product manager */
+        .max-w-7xl,
+        .max-w-7xl *,
+        .max-w-7xl div,
+        .max-w-7xl span,
+        .max-w-7xl p,
+        .max-w-7xl label,
+        .max-w-7xl input,
+        .max-w-7xl select,
+        .max-w-7xl textarea,
+        .max-w-7xl td,
+        .max-w-7xl th {
+            color: #1e293b !important;
+        }
+        
+        /* Button mặc định có màu đen, TRỪ button có text trắng */
+        .max-w-7xl button:not([style*="color: white"]):not(.text-white) {
+            color: #1e293b !important;
+        }
+        
+        /* Input và select phải có màu chữ đen */
+        .max-w-7xl input[type="text"],
+        .max-w-7xl input[type="number"],
+        .max-w-7xl select,
+        .max-w-7xl textarea {
+            color: #1e293b !important;
+            background-color: white !important;
+        }
+        
+        /* Placeholder */
+        .max-w-7xl input::placeholder,
+        .max-w-7xl textarea::placeholder {
+            color: #94a3b8 !important;
+        }
+        
+        /* Button có thể click được */
+        .max-w-7xl button {
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            position: relative !important;
+            z-index: 10 !important;
+        }
+        
+        /* Đảm bảo button text trắng trên nền màu - FORCE - QUAN TRỌNG */
+        .max-w-7xl button[style*="color: white"],
+        .max-w-7xl button[style*="color: white"] *,
+        .max-w-7xl button[style*="color: white"] span {
+            color: white !important;
+        }
+        
+        /* Button có background gradient - chữ trắng */
+        .max-w-7xl button[style*="background: linear-gradient"] {
+            color: white !important;
+        }
+        
+        .max-w-7xl button[style*="background: linear-gradient"] *,
+        .max-w-7xl button[style*="background: linear-gradient"] span {
+            color: white !important;
+        }
+        
+        /* Đảm bảo text trong table có màu */
+        .max-w-7xl table td,
+        .max-w-7xl table th {
+            color: #1e293b !important;
+        }
+        
+        /* Text trong header gradient vẫn trắng */
+        .bg-gradient-to-r.from-blue-600.to-indigo-600,
+        .bg-gradient-to-r.from-blue-600.to-indigo-600 * {
+            color: white !important;
+        }
     </style>
-</head>
-<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen" x-data="productManager()" x-cloak>
-    {% csrf_token %}
 
-    <!-- NAVIGATION -->
-    <nav class="bg-gradient-to-r from-blue-600 to-indigo-600 border-b border-blue-700 p-4 shadow-lg sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <div class="flex items-center gap-4">
-                <h1 class="text-2xl font-black text-white tracking-tight">📦 QUẢN LÝ SẢN PHẨM</h1>
-                <a href="/" class="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl font-bold text-xs uppercase transition-all">
-                    ← Trang chủ
-                </a>
-                <a href="/pos/" class="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl font-bold text-xs uppercase transition-all">
-                    POS
-                </a>
-            </div>
-            <div class="text-white text-sm font-semibold">
-                Tổng: <span class="font-black text-lg" x-text="products.length"></span> sản phẩm
+    <!-- HEADER -->
+    <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 mb-6 shadow-lg">
+        <div class="flex justify-between items-center">
+            <h1 class="text-3xl font-black text-white tracking-tight">📦 QUẢN LÝ SẢN PHẨM</h1>
+            <div class="text-white text-lg font-semibold">
+                Tổng: <span class="font-black text-2xl" x-text="products.length"></span> sản phẩm
             </div>
         </div>
-    </nav>
+    </div>
 
-    <!-- MAIN CONTENT -->
-    <div class="max-w-7xl mx-auto p-6 space-y-6">
-        
-        <!-- SEARCH & FILTER BAR -->
+    <!-- SEARCH & FILTER BAR -->
         <div class="bg-white rounded-2xl shadow-lg border-2 border-blue-200 p-6">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="md:col-span-2">
@@ -57,9 +137,11 @@
                     </select>
                 </div>
                 <div class="flex items-end">
-                    <button @click="showAddModal = true" 
-                        class="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-black rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 uppercase text-sm">
-                        ➕ Thêm mới
+                    <button @click="openAddModal()" 
+                        type="button"
+                        class="w-full px-6 py-3 text-white font-black rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 uppercase text-sm cursor-pointer z-50 relative"
+                        style="background: linear-gradient(to right, #10b981, #059669) !important; color: white !important; pointer-events: auto !important; border: none !important;">
+                        <span style="color: white !important;">➕ Thêm mới</span>
                     </button>
                 </div>
             </div>
@@ -88,7 +170,12 @@
                             </th>
                             <th class="px-6 py-4 text-right text-xs font-black uppercase tracking-wider">
                                 <div class="flex items-center justify-end gap-2">
-                                    💰 Giá bán
+                                    💰 Giá gốc
+                                </div>
+                            </th>
+                            <th class="px-6 py-4 text-right text-xs font-black uppercase tracking-wider">
+                                <div class="flex items-center justify-end gap-2">
+                                    💵 Giá bán
                                 </div>
                             </th>
                             <th class="px-6 py-4 text-center text-xs font-black uppercase tracking-wider">
@@ -119,8 +206,10 @@
                                     <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold" x-text="product.donvi"></span>
                                 </td>
                                 <td class="px-6 py-4 text-right">
+                                    <div class="font-bold text-slate-600" x-text="formatVND(product.gia_goc)"></div>
+                                </td>
+                                <td class="px-6 py-4 text-right">
                                     <div class="font-black text-emerald-600 text-lg" x-text="formatVND(product.gia_ban)"></div>
-                                    <div class="text-xs text-slate-400">Gốc: <span x-text="formatVND(product.gia_goc)"></span></div>
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <span class="text-2xl font-black" 
@@ -165,8 +254,16 @@
     </div>
 
     <!-- MODAL: ADD/EDIT PRODUCT -->
-    <div x-show="showAddModal" @click.self="showAddModal = false"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <template x-if="showAddModal">
+        <div @click.self="showAddModal = false"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+             x-ref="addModal">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div class="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-3xl">
                 <h3 class="text-2xl font-black" x-text="editingProduct ? '✏️ SỬA SẢN PHẨM' : '➕ THÊM SẢN PHẨM MỚI'"></h3>
@@ -253,14 +350,21 @@
             </div>
         </div>
     </div>
+    </template>
 
-    <script>
-        function formatVND(value) {
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Đảm bảo function được định nghĩa TRƯỚC khi Alpine.js khởi tạo
+    // Định nghĩa function ngay lập tức, không đợi DOM ready
+    (function() {
+        window.formatVND = function(value) {
             if (!value && value !== 0) return '0';
             return new Intl.NumberFormat('vi-VN').format(value);
-        }
+        };
 
-        function productManager() {
+        window.productManager = function() {
             return {
                 products: [],
                 searchQuery: '',
@@ -272,15 +376,27 @@
                     barcode: '',
                     ten: '',
                     donvi: 'Cái',
-                    gia_goc: 0,
-                    gia_ban: 0,
+                    gia_goc: '',
+                    gia_ban: '',
                     ton_kho: 0,
                     is_active: true,
                     ghichu: ''
                 },
 
                 init() {
+                    this.showAddModal = false;
+                    this.editingProduct = null;
+                    this.resetForm();
                     this.loadProducts();
+                    console.log('ProductManager init, showAddModal:', this.showAddModal);
+                },
+                
+                openAddModal() {
+                    console.log('openAddModal() called');
+                    this.editingProduct = null;
+                    this.resetForm();
+                    this.showAddModal = true;
+                    console.log('showAddModal set to:', this.showAddModal);
                 },
 
                 get filteredProducts() {
@@ -310,14 +426,36 @@
 
                 editProduct(product) {
                     this.editingProduct = product;
-                    this.formData = { ...product };
+                    this.formData = {
+                        ma: product.ma || '',
+                        barcode: product.barcode || '',
+                        ten: product.ten || '',
+                        donvi: product.donvi || 'Cái',
+                        gia_goc: product.gia_goc || '',
+                        gia_ban: product.gia_ban || '',
+                        ton_kho: product.ton_kho || 0,
+                        is_active: product.is_active !== undefined ? product.is_active : true,
+                        ghichu: product.ghichu || ''
+                    };
                     this.showAddModal = true;
                 },
 
                 async saveProduct() {
-                    if (!this.formData.ten) {
+                    if (!this.formData.ten || !this.formData.ten.trim()) {
                         return alert('Vui lòng nhập tên sản phẩm!');
                     }
+
+                    // Chuẩn hóa dữ liệu
+                    const dataToSend = {
+                        ten: this.formData.ten.trim(),
+                        barcode: (this.formData.barcode || '').trim(),
+                        donvi: (this.formData.donvi || 'Cái').trim(),
+                        gia_goc: parseFloat(this.formData.gia_goc) || 0,
+                        gia_ban: parseFloat(this.formData.gia_ban) || 0,
+                        ton_kho: parseInt(this.formData.ton_kho) || 0,
+                        is_active: this.formData.is_active !== undefined ? this.formData.is_active : true,
+                        ghichu: (this.formData.ghichu || '').trim()
+                    };
 
                     try {
                         const url = this.editingProduct ? `/api/update-product/${this.editingProduct.id}/` : '/api/add-product/';
@@ -327,7 +465,7 @@
                                 'Content-Type': 'application/json',
                                 'X-CSRFToken': this.getCSRFToken()
                             },
-                            body: JSON.stringify(this.formData)
+                            body: JSON.stringify(dataToSend)
                         });
                         
                         const result = await res.json();
@@ -338,10 +476,11 @@
                             this.resetForm();
                             this.loadProducts();
                         } else {
-                            alert('Lỗi: ' + result.message);
+                            alert('Lỗi: ' + (result.message || 'Có lỗi xảy ra'));
                         }
                     } catch (e) {
-                        alert('Lỗi: ' + e);
+                        alert('Lỗi: ' + e.message);
+                        console.error('Error:', e);
                     }
                 },
 
@@ -370,8 +509,8 @@
                         barcode: '',
                         ten: '',
                         donvi: 'Cái',
-                        gia_goc: 0,
-                        gia_ban: 0,
+                        gia_goc: '',
+                        gia_ban: '',
                         ton_kho: 0,
                         is_active: true,
                         ghichu: ''
@@ -383,9 +522,26 @@
                         document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
                 },
 
-                formatVND
+                formatVND: window.formatVND
             }
+        };
+    })();
+    
+    // Debug và fallback cho button
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, productManager defined:', typeof window.productManager);
+        console.log('Alpine available:', typeof Alpine !== 'undefined');
+        
+        // Đợi Alpine.js load xong
+        if (typeof Alpine !== 'undefined') {
+            Alpine.nextTick(() => {
+                console.log('Alpine.js ready');
+            });
+        } else {
+            document.addEventListener('alpine:init', () => {
+                console.log('Alpine.js initialized');
+            });
         }
-    </script>
-</body>
-</html>
+    });
+</script>
+{% endblock %}

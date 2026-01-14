@@ -1,25 +1,10 @@
-<!DOCTYPE html>
-<html lang="vi">
-<script>
-    class SubmitLock {
-        constructor() { this.locks = new Map(); }
-        tryLock(key, timeout = 3000) {
-            if (this.locks.has(key)) return false;
-            this.locks.set(key, true);
-            setTimeout(() => this.locks.delete(key), timeout);
-            return true;
-        }
-        unlock(key) { this.locks.delete(key); }
-    }
-    window.submitLock = new SubmitLock();
-</script>
+{% extends 'base.html' %}
+{% load static %}
+{% block extra_css %}
 
 <head>
     <meta charset="UTF-8">
     <title>Hệ thống POS Bán Hàng | Gemini POS</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Roboto+Mono:wght@500;700&display=swap"
-        rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -64,205 +49,380 @@
         }
     </style>
 </head>
+{% endblock %}
+{% block content %}
 
-<body class="bg-slate-100" x-data="posSystem()" x-cloak>
-    {% csrf_token %}
-
-
-    <!-- 
-=================================================================
-NAVBAR MỚI VỚI DROPDOWN MENU
-=================================================================
-Thay thế navbar cũ bằng code này
--->
-
-    <nav
-        class="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 shadow-2xl border-b-2 border-blue-500">
-        <div class="max-w-full px-4 py-2" x-data="{ 
-        openDropdown: null,
-        toggleDropdown(name) {
-            this.openDropdown = this.openDropdown === name ? null : name;
+<script type="application/json" id="customers-data">{{ customers_json|safe }}</script>
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('error') === 'cannot_edit') {
+        alert('⚠️ Hóa đơn đã duyệt, không thể sửa!');
+        // Xóa ?error khỏi URL
+        window.history.replaceState({}, '', '/hoa-don/');
+    }
+</script>
+<script>
+    window.submitLock = window.submitLock || {
+        locks: {},
+        tryLock(key, duration) {
+            if (this.locks[key]) return false;
+            this.locks[key] = true;
+            setTimeout(() => this.unlock(key), duration);
+            return true;
         },
-        closeDropdowns() {
-            this.openDropdown = null;
+        unlock(key) {
+            delete this.locks[key];
         }
-    }" @click.away="closeDropdowns()">
-            <div class="flex items-center justify-between">
+    };
+</script>
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('posSystem', () => ({
+            today: new Date().toLocaleDateString('vi-VN'),
+            cart: [],
+            customers: JSON.parse(document.getElementById('customers-data').textContent || '[]'),
+            ngayLap: new Date().toISOString().split('T')[0],
+            khachhang_id: "",
+            searchProdQuery: "",
+            selectedQty: 1,           // THÊM DÒNG NÀY
+            selectedProduct: null,    // THÊM DÒNG NÀY
+            searchCust: "",
+            chietkhau_tong: 0,
+            ungtien: 0,
+            ghichu_don: "",
+            subtotal: 0,
+            finalTotal: 0,
+            editingInvoiceId: null,
+            showAddCust: false,
+            showAddProd: false,
+            newCust: {
+                ten: '',
+                sdt: '',
+                phanloai: 'LE',
+                diachi: '',
+                email: '',
+                mst: '',
+                no_dau_ky: 0,
+                han_muc_no: 0,
+                ghichu: ''
+            },
+            newProd: {
+                ten: '',
+                barcode: '',
+                gia_goc: 0,
+                gia: 0,
+                donvi: 'Cái',
+                tonkho: 0,
+                ghichu: ''
+            },
+            formatVND(value) {
+                if (value === null || value === undefined) return '0';
+                return new Intl.NumberFormat('en-US', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 2
+                }).format(value);
+            },
 
-                <!-- LOGO + MENU -->
-                <div class="flex items-center gap-6">
-                    <!-- Logo -->
-                    <a href="/" class="flex items-center gap-2">
-                        <div
-                            class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                            </svg>
-                        </div>
-                        <span class="text-white font-black text-lg hidden lg:block">GEMINI POS</span>
-                    </a>
+            formatNumber(val) {
+                if (!val && val !== 0) return '';
+                return new Intl.NumberFormat('en-US').format(val);
+            },
 
-                    <!-- Menu với Dropdown -->
-                    <div class="flex items-center gap-2">
-                        <!-- Trang chủ -->
-                        <a href="/"
-                            class="px-3 py-2 rounded-lg text-white hover:bg-white/10 transition-all font-medium text-sm">
-                            🏠 <span class="hidden md:inline">Trang chủ</span>
-                        </a>
+            parseNumber(str) {
+                if (!str) return 0;
+                return parseFloat(str.toString().replace(/,/g, '')) || 0;
+            },
 
-                        <!-- BÁN HÀNG - Dropdown -->
-                        <div class="relative">
-                            <button @click="toggleDropdown('ban-hang')"
-                                class="px-3 py-2 rounded-lg text-white hover:bg-blue-600 transition-all font-medium text-sm flex items-center gap-1">
-                                🛒 <span class="hidden md:inline">Bán hàng</span>
-                                <svg class="w-4 h-4" :class="{'rotate-180': openDropdown === 'ban-hang'}" fill="none"
-                                    stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </button>
-                            <!-- Dropdown Menu -->
-                            <div x-show="openDropdown === 'ban-hang'"
-                                x-transition:enter="transition ease-out duration-100"
-                                x-transition:enter-start="opacity-0 scale-95"
-                                x-transition:enter-end="opacity-100 scale-100"
-                                x-transition:leave="transition ease-in duration-75"
-                                x-transition:leave-start="opacity-100 scale-100"
-                                x-transition:leave-end="opacity-0 scale-95"
-                                class="absolute top-full left-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-slate-200 py-2"
-                                style="display: none;">
-                                <a href="/pos/"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-blue-50 transition-colors">
-                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z">
-                                        </path>
-                                    </svg>
-                                    <div>
-                                        <div class="font-bold text-slate-800 text-sm">Tạo đơn bán</div>
-                                        <div class="text-xs text-slate-500">POS bán hàng</div>
-                                    </div>
-                                </a>
-                                <a href="/hoa-don/"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-blue-50 transition-colors">
-                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
-                                        </path>
-                                    </svg>
-                                    <div>
-                                        <div class="font-bold text-slate-800 text-sm">Danh sách hóa đơn</div>
-                                        <div class="text-xs text-slate-500">Lịch sử đơn bán</div>
-                                    </div>
-                                </a>
-                            </div>
-                        </div>
+            init() {
+                // Check localStorage cho edit
+                const savedData = localStorage.getItem('edit_invoice_data');
+                if (savedData) {
+                    try {
+                        const sessionData = JSON.parse(savedData);
+                        this.khachhang_id = sessionData.khachhang_id;
+                        const customer = this.customers.find(c => c.id == sessionData.khachhang_id);
+                        if (customer) this.searchCust = customer.ten;
+                        this.cart = sessionData.items;
+                        this.chietkhau_tong = sessionData.chietkhau_tong || 0;
+                        this.ungtien = sessionData.khachhangungtien || 0;
+                        this.ghichu_don = sessionData.ghichu || '';
+                        this.editingInvoiceId = sessionData.edit_id || null;
+                        this.calculate();
 
-                        <!-- HOÀN HÀNG - Dropdown -->
-                        <div class="relative">
-                            <button @click="toggleDropdown('hoan-hang')"
-                                class="px-3 py-2 rounded-lg text-white hover:bg-rose-600 transition-all font-medium text-sm flex items-center gap-1">
-                                🔄 <span class="hidden md:inline">Hoàn hàng</span>
-                                <svg class="w-4 h-4" :class="{'rotate-180': openDropdown === 'hoan-hang'}" fill="none"
-                                    stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </button>
-                            <!-- Dropdown Menu -->
-                            <div x-show="openDropdown === 'hoan-hang'"
-                                x-transition:enter="transition ease-out duration-100"
-                                x-transition:enter-start="opacity-0 scale-95"
-                                x-transition:enter-end="opacity-100 scale-100"
-                                x-transition:leave="transition ease-in duration-75"
-                                x-transition:leave-start="opacity-100 scale-100"
-                                x-transition:leave-end="opacity-0 scale-95"
-                                class="absolute top-full left-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-slate-200 py-2"
-                                style="display: none;">
-                                <a href="/pos-hoan/"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-rose-50 transition-colors">
-                                    <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z">
-                                        </path>
-                                    </svg>
-                                    <div>
-                                        <div class="font-bold text-slate-800 text-sm">Tạo đơn hoàn</div>
-                                        <div class="text-xs text-slate-500">Xử lý trả hàng</div>
-                                    </div>
-                                </a>
-                                <a href="/hoa-don-hoan/"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-rose-50 transition-colors">
-                                    <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
-                                        </path>
-                                    </svg>
-                                    <div>
-                                        <div class="font-bold text-slate-800 text-sm">Danh sách đơn hoàn</div>
-                                        <div class="text-xs text-slate-500">Lịch sử hoàn hàng</div>
-                                    </div>
-                                </a>
-                            </div>
-                        </div>
+                        localStorage.removeItem('edit_invoice_data');
+                    } catch (e) {
+                        console.error("Lỗi load data:", e);
+                    }
+                } else {
+                    // ✅ THÊM CHECK COPY Ở ĐÂY (khi không có edit)
+                    const copyId = new URLSearchParams(window.location.search).get('copy');
+                    if (copyId) {
+                        fetch(`/api/copy-invoice/${copyId}/`)
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.status === 'success') {
+                                    this.cart = d.data.items;
+                                    this.khachhang_id = d.data.khachhang_id;
+                                    const customer = this.customers.find(c => c.id == d.data.khachhang_id);
+                                    if (customer) this.searchCust = customer.ten;
+                                    this.chietkhau_tong = d.data.chietkhau_tong;
+                                    this.ghichu_don = d.data.ghichu_don;
+                                    this.calculate();
+                                    alert(`Đã sao chép từ ${d.data.ma_goc}`);
+                                }
+                            })
+                            .catch(err => alert('Lỗi: ' + err));
+                    } else {
+                        // Load customers mặc định (nếu không edit và không copy)
+                        // BỎ PHẦN NÀY ĐI nếu không muốn auto-select khách
+                        // if (this.customers.length > 0) {
+                        //     this.khachhang_id = this.customers[0].id;
+                        //     this.searchCust = this.customers[0].ten;
+                        // }
+                    }
+                }
+            },
+            addItem(product) {
+                const qty = parseFloat(this.selectedQty) || 1;
 
-                        <!-- Phiếu thu -->
-                        <a href="{% url 'danh_sach_phieu_thu' %}"
-                            class="px-3 py-2 rounded-lg text-white hover:bg-amber-600 transition-all font-medium text-sm">
-                            💰 <span class="hidden md:inline">Phiếu thu</span>
-                        </a>
+                let existingItem = this.cart.find(item => item.id === product.id);
+                if (existingItem) {
+                    existingItem.soluong = (parseFloat(existingItem.soluong) || 0) + qty;
+                } else {
+                    this.cart.push({
+                        id: product.id,
+                        ten: product.ten,
+                        gia: parseFloat(product.gia) || 0,
+                        soluong: qty,
+                        ck_item: 0,
+                        donvi: product.donvi || 'Cái',
+                        ghichu_sp: ''
+                    });
+                }
+                this.calculate();
 
-                        <!-- Sổ công nợ -->
-                        <a href="{% url 'so_cai_cong_no' %}"
-                            class="px-3 py-2 rounded-lg text-white hover:bg-purple-600 transition-all font-medium text-sm">
-                            📖 <span class="hidden md:inline">Sổ công nợ</span>
-                        </a>
+                // Reset
+                this.searchProdQuery = '';
+                this.selectedQty = 1;
+                this.selectedProduct = null;
+                this.$nextTick(() => document.getElementById('search-input')?.focus());
+            },
+            addToCart() {
+                if (!this.selectedProduct) {
+                    alert('Vui lòng chọn sản phẩm trước');
+                    return;
+                }
+                this.addItem(this.selectedProduct);
+                document.getElementById('search-input')?.focus();
+            },
+            removeItem(index) {
+                if (confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
+                    this.cart.splice(index, 1);
+                    this.calculate();
+                }
+            },
 
-                        <!-- Khách hàng -->
-                        <a href="/customer-manager/"
-                            class="px-3 py-2 rounded-lg text-white hover:bg-cyan-600 transition-all font-medium text-sm">
-                            👥 <span class="hidden md:inline">Khách hàng</span>
-                        </a>
-                    </div>
-                </div>
+            calculate() {
+                let total = 0;
+                this.cart.forEach(item => {
+                    const gia = parseFloat(item.gia) || 0;
+                    const sl = parseFloat(item.soluong) || 0;
+                    const ck_phan_tram = parseFloat(item.ck_item) || 0;
+                    const tien_chiet_khau_item = (gia * sl) * (ck_phan_tram / 100);
+                    item.chietkhau = tien_chiet_khau_item;
+                    total += (gia * sl) - tien_chiet_khau_item;
+                });
 
-                <!-- USER INFO + LOGOUT -->
-                <div class="flex items-center gap-3">
-                    <!-- User Info -->
-                    <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5">
-                        <div
-                            class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center font-black text-white text-sm">
-                            {{ request.user.username|slice:":1"|upper }}
-                        </div>
-                        <div class="text-left hidden sm:block">
-                            <div class="text-white text-sm font-bold">{{ request.user.username }}</div>
-                            <div class="text-blue-300 text-xs">
-                                {% if request.user.is_superuser %}👑 Admin
-                                {% elif request.user.groups.all %}{{ request.user.groups.first.name }}
-                                {% else %}User{% endif %}
-                            </div>
-                        </div>
-                    </div>
+                this.subtotal = total;
+                const discTong = parseFloat(this.chietkhau_tong) || 0;
+                this.finalTotal = Math.round(total * (1 - (discTong / 100)));
+            },
+            async addNewCustomer() {
+                const ten = this.newCust.ten;
+                if (!ten) {
+                    alert("Vui lòng nhập tên khách hàng!");
+                    return;
+                }
 
-                    <!-- Logout -->
-                    <form method="POST" action="{% url 'logout' %}">
-                        {% csrf_token %}
-                        <button type="submit"
-                            class="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white font-bold px-3 py-2 rounded-lg transition-all">
-                            🚪 <span class="hidden md:inline">Thoát</span>
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </nav>
-    <!-- Khoảng trống để content không bị navbar che -->
-    <div class="h-14"></div>
+                try {
+                    const response = await fetch('/add_customer_fast/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': this.getCSRFToken()
+                        },
+                        body: JSON.stringify({
+                            ten: ten,
+                            sdt: this.newCust.sdt,
+                            phanloai: this.newCust.phanloai,
+                            diachi: this.newCust.diachi,
+                            email: this.newCust.email,
+                            mst: this.newCust.mst,
+                            no_dau_ky: this.newCust.no_dau_ky,
+                            han_muc_no: this.newCust.han_muc_no,
+                            ghichu: this.newCust.ghichu
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.status === 'success') {
+                        alert(`Thành công!`);
+                        this.customers.push({
+                            id: result.id,
+                            ten: result.ten,
+                            sdt: result.sdt,
+                            tong_no: 0
+                        });
+
+                        this.khachhang_id = result.id;
+                        this.searchCust = result.ten;
+                        this.showAddCust = false;
+                        this.newCust = {
+                            ten: '',
+                            sdt: '',
+                            phanloai: 'LE',
+                            diachi: '',
+                            email: '',
+                            mst: '',
+                            no_dau_ky: 0,
+                            han_muc_no: 0,
+                            ghichu: ''
+                        };
+                    } else {
+                        alert("Lỗi: " + result.message);
+                    }
+                } catch (error) {
+                    alert("Lỗi kết nối!");
+                }
+            },
+
+            async add_product_fast_js() {
+                const ten = this.newProd.ten;
+                const gia = this.parseNumber(this.newProd.gia);
+
+                if (!ten) {
+                    alert("Vui lòng nhập tên sản phẩm!");
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/add_product_fast/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': this.getCSRFToken()
+                        },
+                        body: JSON.stringify({
+                            ten: ten,
+                            barcode: this.newProd.barcode,
+                            gia_goc: this.parseNumber(this.newProd.gia_goc),
+                            gia: gia,
+                            donvi: this.newProd.donvi,
+                            tonkho: this.parseNumber(this.newProd.tonkho),
+                            ghichu: this.newProd.ghichu
+                        })
+                    });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        alert(`Đã thêm sản phẩm: ${result.ten}`);
+
+                        this.addItem({
+                            id: result.id,
+                            ten: result.ten,
+                            gia: result.gia,
+                            donvi: result.donvi
+                        });
+
+                        this.showAddProd = false;
+                        this.newProd = {
+                            ten: '',
+                            barcode: '',
+                            gia_goc: 0,
+                            gia: 0,
+                            donvi: 'Cái',
+                            tonkho: 0,
+                            ghichu: ''
+                        };
+                    } else {
+                        alert("Lỗi: " + result.message);
+                    }
+                } catch (error) {
+                    alert("Lỗi kết nối!");
+                }
+            },
+
+            async saveInvoiceAction(shouldApprove) {
+                // ✅ THÊM: Kiểm tra lock
+                if (!window.submitLock.tryLock('save-invoice', 3000)) {
+                    alert('⚠️ Đang lưu đơn hàng, vui lòng đợi...');
+                    return;
+                }
+
+                try {
+                    if (this.cart.length === 0) {
+                        alert("Giỏ hàng trống!");
+                        return;
+                    }
+                    if (!this.khachhang_id) {
+                        alert("Vui lòng chọn khách hàng!");
+                        return;
+                    }
+
+                    this.calculate();
+
+                    const payload = {
+                        edit_id: this.editingInvoiceId,
+                        khachhang_id: this.khachhang_id,
+                        ngay_lap: this.ngayLap,
+                        chietkhau_tong: parseFloat(this.chietkhau_tong) || 0,
+                        tong_tien: this.finalTotal,
+                        khachhangungtien: parseFloat(this.ungtien) || 0,
+                        ghichu_don: this.ghichu_don,
+                        items: this.cart.map(item => ({
+                            id: item.id,
+                            soluong: item.soluong,
+                            gia: item.gia,
+                            donvi: item.donvi,
+                            ck_item: parseFloat(item.ck_item) || 0,
+                            ghichu_sp: item.ghichu_sp || ''
+                        })),
+                        admin_approve: shouldApprove
+                    };
+
+                    const res = await fetch('/api/save-invoice/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': this.getCSRFToken()
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await res.json();
+
+                    if (result.status === 'success') {
+                        alert(shouldApprove ? "✅ Đã duyệt và ghi sổ nợ thành công!" : "✅ Đã lưu đơn tạm!");
+                        location.reload();
+                    } else {
+                        alert("❌ Lỗi: " + result.message);
+                    }
+                } catch (e) {
+                    alert("❌ Lỗi máy chủ không phản hồi!");
+                } finally {
+                    // ✅ THÊM: Unlock sau khi xong
+                    window.submitLock.unlock('save-invoice');
+                }
+            },
+            getCSRFToken() {
+                return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                    document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+            }
+        }));
+    });
+</script>
+<div x-data="posSystem" x-cloak>
+    {% csrf_token %}
     <!-- MAIN CONTENT -->
     <div class="max-w-[99%] mx-auto p-3 grid grid-cols-12 gap-4 h-[calc(100vh-100px)] overflow-hidden">
 
@@ -549,10 +709,12 @@ Thay thế navbar cũ bằng code này
 
     <!-- MODAL: ADD CUSTOMER -->
     <div x-show="showAddCust"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" x-cloak>
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-cloak>
         <div
-            class="bg-white p-8 rounded-[2.5rem] shadow-2xl w-[500px] border border-slate-200 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <div class="flex items-center mb-6">
+            class="bg-white rounded-[2rem] shadow-2xl w-full max-w-[500px] border border-slate-200 max-h-[90vh] flex flex-col">
+
+            <!-- HEADER - Cố định -->
+            <div class="flex items-center p-6 pb-4 border-b border-slate-100 shrink-0">
                 <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none"
                         viewBox="0 0 24 24" stroke="currentColor">
@@ -560,96 +722,102 @@ Thay thế navbar cũ bằng code này
                             d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                     </svg>
                 </div>
-                <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tighter">Khách hàng mới</h3>
+                <h3 class="text-xl font-black text-slate-800 uppercase tracking-tighter">Khách hàng mới</h3>
             </div>
 
-            <div class="space-y-4">
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Tên khách hàng *</label>
-                    <input type="text" x-model="newCust.ten"
-                        class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
-                        placeholder="Nguyễn Văn A...">
-                </div>
+            <!-- CONTENT - Cuộn -->
+            <div class="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Tên khách hàng *</label>
+                        <input type="text" x-model="newCust.ten"
+                            class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
+                            placeholder="Nguyễn Văn A...">
+                    </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Số điện thoại</label>
-                        <input type="text" x-model="newCust.sdt"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
-                            placeholder="090...">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Số điện thoại</label>
+                            <input type="text" x-model="newCust.sdt"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
+                                placeholder="090...">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Phân loại</label>
+                            <select x-model="newCust.phanloai"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold">
+                                <option value="LE">Lẻ</option>
+                                <option value="SI">Sỉ</option>
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Phân loại</label>
-                        <select x-model="newCust.phanloai"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold">
-                            <option value="LE">Lẻ</option>
-                            <option value="SI">Sỉ</option>
-                        </select>
-                    </div>
-                </div>
 
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Địa chỉ</label>
-                    <input type="text" x-model="newCust.diachi"
-                        class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
-                        placeholder="Địa chỉ...">
-                </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Địa chỉ</label>
+                        <input type="text" x-model="newCust.diachi"
+                            class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
+                            placeholder="Địa chỉ...">
+                    </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Email</label>
-                        <input type="email" x-model="newCust.email"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
-                            placeholder="email@...">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Email</label>
+                            <input type="email" x-model="newCust.email"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
+                                placeholder="email@...">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">MST</label>
+                            <input type="text" x-model="newCust.mst"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
+                                placeholder="Mã số thuế...">
+                        </div>
                     </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">MST</label>
-                        <input type="text" x-model="newCust.mst"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold"
-                            placeholder="Mã số thuế...">
-                    </div>
-                </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Nợ đầu kỳ</label>
-                        <input type="text" :value="formatNumber(newCust.no_dau_ky)"
-                            @input="newCust.no_dau_ky = parseNumber($event.target.value)"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold text-red-600"
-                            placeholder="0">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Nợ đầu kỳ</label>
+                            <input type="text" :value="formatNumber(newCust.no_dau_ky)"
+                                @input="newCust.no_dau_ky = parseNumber($event.target.value)"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold text-red-600"
+                                placeholder="0">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Hạn mức nợ</label>
+                            <input type="text" :value="formatNumber(newCust.han_muc_no)"
+                                @input="newCust.han_muc_no = parseNumber($event.target.value)"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold text-orange-600"
+                                placeholder="0">
+                        </div>
                     </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Hạn mức nợ</label>
-                        <input type="text" :value="formatNumber(newCust.han_muc_no)"
-                            @input="newCust.han_muc_no = parseNumber($event.target.value)"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold text-orange-600"
-                            placeholder="0">
-                    </div>
-                </div>
 
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Ghi chú</label>
-                    <textarea x-model="newCust.ghichu"
-                        class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-medium"
-                        rows="2" placeholder="Ghi chú về khách hàng..."></textarea>
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Ghi chú</label>
+                        <textarea x-model="newCust.ghichu"
+                            class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-medium"
+                            rows="2" placeholder="Ghi chú về khách hàng..."></textarea>
+                    </div>
                 </div>
             </div>
 
-            <div class="flex gap-4 mt-8">
+            <!-- FOOTER - Cố định -->
+            <div class="flex gap-3 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white rounded-b-[2rem]">
                 <button @click="showAddCust = false"
-                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-500 py-4 rounded-2xl font-bold uppercase transition-all">Hủy</button>
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-500 py-3 rounded-xl font-bold uppercase transition-all">Hủy</button>
                 <button @click="addNewCustomer()"
-                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold uppercase transition-all">Lưu</button>
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold uppercase transition-all">Lưu</button>
             </div>
         </div>
     </div>
 
     <!-- MODAL: ADD PRODUCT -->
     <div x-show="showAddProd"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" x-cloak>
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-cloak>
         <div
-            class="bg-white p-8 rounded-[2.5rem] shadow-2xl w-[550px] border border-slate-200 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <div class="flex items-center mb-6">
+            class="bg-white rounded-[2rem] shadow-2xl w-full max-w-[550px] border border-slate-200 max-h-[90vh] flex flex-col">
+
+            <!-- HEADER - Cố định -->
+            <div class="flex items-center p-6 pb-4 border-b border-slate-100 shrink-0">
                 <div class="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center mr-3">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600" fill="none"
                         viewBox="0 0 24 24" stroke="currentColor">
@@ -657,430 +825,72 @@ Thay thế navbar cũ bằng code này
                             d="M12 9v3m0 0v3m0-3h3m-3 0h-3m-9-4h10M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                     </svg>
                 </div>
-                <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tighter">Thêm SP nhanh</h3>
+                <h3 class="text-xl font-black text-slate-800 uppercase tracking-tighter">Thêm SP nhanh</h3>
             </div>
 
-            <div class="space-y-4">
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Tên sản phẩm *</label>
-                    <input type="text" x-model="newProd.ten"
-                        class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold">
-                </div>
-
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Barcode</label>
-                    <input type="text" x-model="newProd.barcode"
-                        class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold"
-                        placeholder="Mã vạch...">
-                </div>
-
-                <div class="grid grid-cols-3 gap-4">
+            <!-- CONTENT - Cuộn -->
+            <div class="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                <div class="space-y-3">
                     <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Giá gốc</label>
-                        <input type="text" :value="formatNumber(newProd.gia_goc)"
-                            @input="newProd.gia_goc = parseNumber($event.target.value)"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold text-slate-600">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Tên sản phẩm *</label>
+                        <input type="text" x-model="newProd.ten"
+                            class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold">
                     </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Giá bán *</label>
-                        <input type="text" :value="formatNumber(newProd.gia)"
-                            @input="newProd.gia = parseNumber($event.target.value)"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold text-emerald-600">
-                    </div>
-                    <div>
-                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Đơn vị</label>
-                        <input type="text" x-model="newProd.donvi"
-                            class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold text-center"
-                            placeholder="Cái/Kg...">
-                    </div>
-                </div>
 
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Tồn kho ban đầu</label>
-                    <input type="text" :value="formatNumber(newProd.tonkho)"
-                        @input="newProd.tonkho = parseNumber($event.target.value)"
-                        class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold text-blue-600"
-                        placeholder="0">
-                </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Barcode</label>
+                        <input type="text" x-model="newProd.barcode"
+                            class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold"
+                            placeholder="Mã vạch...">
+                    </div>
 
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Ghi chú</label>
-                    <textarea x-model="newProd.ghichu"
-                        class="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-medium"
-                        rows="2" placeholder="Ghi chú về sản phẩm..."></textarea>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Giá gốc</label>
+                            <input type="text" :value="formatNumber(newProd.gia_goc)"
+                                @input="newProd.gia_goc = parseNumber($event.target.value)"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold text-slate-600">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Giá bán *</label>
+                            <input type="text" :value="formatNumber(newProd.gia)"
+                                @input="newProd.gia = parseNumber($event.target.value)"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold text-emerald-600">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Đơn vị</label>
+                            <input type="text" x-model="newProd.donvi"
+                                class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold text-center"
+                                placeholder="Cái/Kg...">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Tồn kho ban đầu</label>
+                        <input type="text" :value="formatNumber(newProd.tonkho)"
+                            @input="newProd.tonkho = parseNumber($event.target.value)"
+                            class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-bold text-blue-600"
+                            placeholder="0">
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Ghi chú</label>
+                        <textarea x-model="newProd.ghichu"
+                            class="w-full p-3 border-2 border-slate-100 rounded-2xl focus:border-emerald-500 outline-none font-medium"
+                            rows="2" placeholder="Ghi chú về sản phẩm..."></textarea>
+                    </div>
                 </div>
             </div>
 
-            <div class="flex space-x-3 mt-8">
-                <button @click="add_product_fast_js()"
-                    class="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black uppercase tracking-widest">Thêm
-                    & Bán</button>
+            <!-- FOOTER - Cố định -->
+            <div class="flex gap-3 p-6 pt-4 border-t border-slate-100 shrink-0 bg-white rounded-b-[2rem]">
                 <button @click="showAddProd = false"
-                    class="flex-1 bg-slate-100 py-4 rounded-2xl font-bold uppercase">Hủy</button>
+                    class="flex-1 bg-slate-100 hover:bg-slate-200 py-3 rounded-xl font-bold uppercase transition-all">Hủy</button>
+                <button @click="add_product_fast_js()"
+                    class="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-black uppercase tracking-widest">Thêm
+                    & Bán</button>
             </div>
         </div>
     </div>
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('error') === 'cannot_edit') {
-            alert('⚠️ Hóa đơn đã duyệt, không thể sửa!');
-            // Xóa ?error khỏi URL
-            window.history.replaceState({}, '', '/hoa-don/');
-        }
-    </script>
-    <script type="application/json" id="customers-data">
-{{ customers_json|safe }}
-</script>
-    <script>
-        window.formatVND = function (value) {
-            if (value === null || value === undefined) return '0';
-            return new Intl.NumberFormat('en-US', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 2
-            }).format(value);
-        };
-
-        window.parseNumber = function (str) {
-            if (!str) return 0;
-            return parseFloat(str.toString().replace(/,/g, '')) || 0;
-        };
-
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('posSystem', () => ({
-                today: new Date().toLocaleDateString('vi-VN'),
-                cart: [],
-                customers: JSON.parse(document.getElementById('customers-data').textContent || '[]'),
-                ngayLap: new Date().toISOString().split('T')[0],
-                khachhang_id: "",
-                searchProdQuery: "",
-                selectedQty: 1,           // THÊM DÒNG NÀY
-                selectedProduct: null,    // THÊM DÒNG NÀY
-                searchCust: "",
-                chietkhau_tong: 0,
-                ungtien: 0,
-                ghichu_don: "",
-                subtotal: 0,
-                finalTotal: 0,
-                editingInvoiceId: null,
-                showAddCust: false,
-                showAddProd: false,
-                newCust: {
-                    ten: '',
-                    sdt: '',
-                    phanloai: 'LE',
-                    diachi: '',
-                    email: '',
-                    mst: '',
-                    no_dau_ky: 0,
-                    han_muc_no: 0,
-                    ghichu: ''
-                },
-                newProd: {
-                    ten: '',
-                    barcode: '',
-                    gia_goc: 0,
-                    gia: 0,
-                    donvi: 'Cái',
-                    tonkho: 0,
-                    ghichu: ''
-                },
-
-                init() {
-                    // Check localStorage cho edit
-                    const savedData = localStorage.getItem('edit_invoice_data');
-                    if (savedData) {
-                        try {
-                            const sessionData = JSON.parse(savedData);
-                            this.khachhang_id = sessionData.khachhang_id;
-                            const customer = this.customers.find(c => c.id == sessionData.khachhang_id);
-                            if (customer) this.searchCust = customer.ten;
-                            this.cart = sessionData.items;
-                            this.chietkhau_tong = sessionData.chietkhau_tong || 0;
-                            this.ungtien = sessionData.khachhangungtien || 0;
-                            this.ghichu_don = sessionData.ghichu || '';
-                            this.editingInvoiceId = sessionData.edit_id || null;
-                            this.calculate();
-
-                            localStorage.removeItem('edit_invoice_data');
-                        } catch (e) {
-                            console.error("Lỗi load data:", e);
-                        }
-                    } else {
-                        // ✅ THÊM CHECK COPY Ở ĐÂY (khi không có edit)
-                        const copyId = new URLSearchParams(window.location.search).get('copy');
-                        if (copyId) {
-                            fetch(`/api/copy-invoice/${copyId}/`)
-                                .then(r => r.json())
-                                .then(d => {
-                                    if (d.status === 'success') {
-                                        this.cart = d.data.items;
-                                        this.khachhang_id = d.data.khachhang_id;
-                                        const customer = this.customers.find(c => c.id == d.data.khachhang_id);
-                                        if (customer) this.searchCust = customer.ten;
-                                        this.chietkhau_tong = d.data.chietkhau_tong;
-                                        this.ghichu_don = d.data.ghichu_don;
-                                        this.calculate();
-                                        alert(`Đã sao chép từ ${d.data.ma_goc}`);
-                                    }
-                                })
-                                .catch(err => alert('Lỗi: ' + err));
-                        } else {
-                            // Load customers mặc định (nếu không edit và không copy)
-                            // BỎ PHẦN NÀY ĐI nếu không muốn auto-select khách
-                            // if (this.customers.length > 0) {
-                            //     this.khachhang_id = this.customers[0].id;
-                            //     this.searchCust = this.customers[0].ten;
-                            // }
-                        }
-                    }
-                },
-                addItem(product) {
-                    const qty = parseFloat(this.selectedQty) || 1;
-
-                    let existingItem = this.cart.find(item => item.id === product.id);
-                    if (existingItem) {
-                        existingItem.soluong = (parseFloat(existingItem.soluong) || 0) + qty;
-                    } else {
-                        this.cart.push({
-                            id: product.id,
-                            ten: product.ten,
-                            gia: parseFloat(product.gia) || 0,
-                            soluong: qty,
-                            ck_item: 0,
-                            donvi: product.donvi || 'Cái',
-                            ghichu_sp: ''
-                        });
-                    }
-                    this.calculate();
-
-                    // Reset
-                    this.searchProdQuery = '';
-                    this.selectedQty = 1;
-                    this.selectedProduct = null;
-                    this.$nextTick(() => document.getElementById('search-input')?.focus());
-                },
-                addToCart() {
-                    if (!this.selectedProduct) {
-                        alert('Vui lòng chọn sản phẩm trước');
-                        return;
-                    }
-                    this.addItem(this.selectedProduct);
-                    document.getElementById('search-input')?.focus();
-                },
-                removeItem(index) {
-                    if (confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-                        this.cart.splice(index, 1);
-                        this.calculate();
-                    }
-                },
-
-                calculate() {
-                    let total = 0;
-                    this.cart.forEach(item => {
-                        const gia = parseFloat(item.gia) || 0;
-                        const sl = parseFloat(item.soluong) || 0;
-                        const ck_phan_tram = parseFloat(item.ck_item) || 0;
-                        const tien_chiet_khau_item = (gia * sl) * (ck_phan_tram / 100);
-                        item.chietkhau = tien_chiet_khau_item;
-                        total += (gia * sl) - tien_chiet_khau_item;
-                    });
-
-                    this.subtotal = total;
-                    const discTong = parseFloat(this.chietkhau_tong) || 0;
-                    this.finalTotal = Math.round(total * (1 - (discTong / 100)));
-                },
-
-                formatNumber(val) {
-                    if (!val && val !== 0) return '';
-                    return new Intl.NumberFormat('en-US').format(val);
-                },
-
-                parseNumber(str) {
-                    if (!str) return 0;
-                    return parseFloat(str.toString().replace(/,/g, '')) || 0;
-                },
-
-                async addNewCustomer() {
-                    const ten = this.newCust.ten;
-                    if (!ten) {
-                        alert("Vui lòng nhập tên khách hàng!");
-                        return;
-                    }
-
-                    try {
-                        const response = await fetch('/add_customer_fast/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': this.getCSRFToken()
-                            },
-                            body: JSON.stringify({
-                                ten: ten,
-                                sdt: this.newCust.sdt,
-                                phanloai: this.newCust.phanloai,
-                                diachi: this.newCust.diachi,
-                                email: this.newCust.email,
-                                mst: this.newCust.mst,
-                                no_dau_ky: this.newCust.no_dau_ky,
-                                han_muc_no: this.newCust.han_muc_no,
-                                ghichu: this.newCust.ghichu
-                            })
-                        });
-
-                        const result = await response.json();
-
-                        if (result.status === 'success') {
-                            alert(`Thành công!`);
-                            this.customers.push({
-                                id: result.id,
-                                ten: result.ten,
-                                sdt: result.sdt,
-                                tong_no: 0
-                            });
-
-                            this.khachhang_id = result.id;
-                            this.searchCust = result.ten;
-                            this.showAddCust = false;
-                            this.newCust = {
-                                ten: '',
-                                sdt: '',
-                                phanloai: 'LE',
-                                diachi: '',
-                                email: '',
-                                mst: '',
-                                no_dau_ky: 0,
-                                han_muc_no: 0,
-                                ghichu: ''
-                            };
-                        } else {
-                            alert("Lỗi: " + result.message);
-                        }
-                    } catch (error) {
-                        alert("Lỗi kết nối!");
-                    }
-                },
-
-                async add_product_fast_js() {
-                    const ten = this.newProd.ten;
-                    const gia = this.parseNumber(this.newProd.gia);
-
-                    if (!ten) {
-                        alert("Vui lòng nhập tên sản phẩm!");
-                        return;
-                    }
-
-                    try {
-                        const response = await fetch('/add_product_fast/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': this.getCSRFToken()
-                            },
-                            body: JSON.stringify({
-                                ten: ten,
-                                barcode: this.newProd.barcode,
-                                gia_goc: this.parseNumber(this.newProd.gia_goc),
-                                gia: gia,
-                                donvi: this.newProd.donvi,
-                                tonkho: this.parseNumber(this.newProd.tonkho),
-                                ghichu: this.newProd.ghichu
-                            })
-                        });
-                        const result = await response.json();
-                        if (result.status === 'success') {
-                            alert(`Đã thêm sản phẩm: ${result.ten}`);
-
-                            this.addItem({
-                                id: result.id,
-                                ten: result.ten,
-                                gia: result.gia,
-                                donvi: result.donvi
-                            });
-
-                            this.showAddProd = false;
-                            this.newProd = {
-                                ten: '',
-                                barcode: '',
-                                gia_goc: 0,
-                                gia: 0,
-                                donvi: 'Cái',
-                                tonkho: 0,
-                                ghichu: ''
-                            };
-                        } else {
-                            alert("Lỗi: " + result.message);
-                        }
-                    } catch (error) {
-                        alert("Lỗi kết nối!");
-                    }
-                },
-
-                async saveInvoiceAction(shouldApprove) {
-                    // ✅ THÊM: Kiểm tra lock
-                    if (!window.submitLock.tryLock('save-invoice', 3000)) {
-                        alert('⚠️ Đang lưu đơn hàng, vui lòng đợi...');
-                        return;
-                    }
-
-                    try {
-                        if (this.cart.length === 0) {
-                            alert("Giỏ hàng trống!");
-                            return;
-                        }
-                        if (!this.khachhang_id) {
-                            alert("Vui lòng chọn khách hàng!");
-                            return;
-                        }
-
-                        this.calculate();
-
-                        const payload = {
-                            edit_id: this.editingInvoiceId,
-                            khachhang_id: this.khachhang_id,
-                            ngay_lap: this.ngayLap,
-                            chietkhau_tong: parseFloat(this.chietkhau_tong) || 0,
-                            tong_tien: this.finalTotal,
-                            khachhangungtien: parseFloat(this.ungtien) || 0,
-                            ghichu_don: this.ghichu_don,
-                            items: this.cart.map(item => ({
-                                id: item.id,
-                                soluong: item.soluong,
-                                gia: item.gia,
-                                donvi: item.donvi,
-                                ck_item: parseFloat(item.ck_item) || 0,
-                                ghichu_sp: item.ghichu_sp || ''
-                            })),
-                            admin_approve: shouldApprove
-                        };
-
-                        const res = await fetch('/api/save-invoice/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': this.getCSRFToken()
-                            },
-                            body: JSON.stringify(payload)
-                        });
-
-                        const result = await res.json();
-
-                        if (result.status === 'success') {
-                            alert(shouldApprove ? "✅ Đã duyệt và ghi sổ nợ thành công!" : "✅ Đã lưu đơn tạm!");
-                            location.reload();
-                        } else {
-                            alert("❌ Lỗi: " + result.message);
-                        }
-                    } catch (e) {
-                        alert("❌ Lỗi máy chủ không phản hồi!");
-                    } finally {
-                        // ✅ THÊM: Unlock sau khi xong
-                        window.submitLock.unlock('save-invoice');
-                    }
-                },
-                getCSRFToken() {
-                    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-                        document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
-                }
-            }));
-        });
-    </script>
+</div>
+{% endblock %}

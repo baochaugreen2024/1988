@@ -1,25 +1,9 @@
-<!DOCTYPE html>
-<html lang="vi">
-<script>
-    class SubmitLock {
-        constructor() { this.locks = new Map(); }
-        tryLock(key, timeout = 3000) {
-            if (this.locks.has(key)) return false;
-            this.locks.set(key, true);
-            setTimeout(() => this.locks.delete(key), timeout);
-            return true;
-        }
-        unlock(key) { this.locks.delete(key); }
-    }
-    window.submitLock = new SubmitLock();
-</script>
-
+{% extends 'base.html' %}
+{% load static %}
+{% block extra_css %}
 <head>
     <meta charset="UTF-8">
     <title>Hệ thống Hoàn Hàng | Gemini POS</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Roboto+Mono:wght@500;700&display=swap"
-        rel="stylesheet">
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -45,425 +29,22 @@
         }
     </style>
 </head>
-
-<body class="bg-slate-100" x-data="posHoanSystem()" x-cloak>
-    {% csrf_token %}
-
-    <!-- 
-=================================================================
-NAVBAR MỚI VỚI DROPDOWN MENU
-=================================================================
-Thay thế navbar cũ bằng code này
--->
-
-    <nav
-        class="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 shadow-2xl border-b-2 border-blue-500">
-        <div class="max-w-full px-4 py-2" x-data="{ 
-        openDropdown: null,
-        toggleDropdown(name) {
-            this.openDropdown = this.openDropdown === name ? null : name;
-        },
-        closeDropdowns() {
-            this.openDropdown = null;
+{% endblock %}
+{% block content %}
+<script type="application/json" id="customers-data">{{ customers_json|safe }}</script>
+<script>
+    class SubmitLock {
+        constructor() { this.locks = new Map(); }
+        tryLock(key, timeout = 3000) {
+            if (this.locks.has(key)) return false;
+            this.locks.set(key, true);
+            setTimeout(() => this.locks.delete(key), timeout);
+            return true;
         }
-    }" @click.away="closeDropdowns()">
-            <div class="flex items-center justify-between">
-
-                <!-- LOGO + MENU -->
-                <div class="flex items-center gap-6">
-                    <!-- Logo -->
-                    <a href="/" class="flex items-center gap-2">
-                        <div
-                            class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                            </svg>
-                        </div>
-                        <span class="text-white font-black text-lg hidden lg:block">GEMINI POS</span>
-                    </a>
-
-                    <!-- Menu với Dropdown -->
-                    <div class="flex items-center gap-2">
-                        <!-- Trang chủ -->
-                        <a href="/"
-                            class="px-3 py-2 rounded-lg text-white hover:bg-white/10 transition-all font-medium text-sm">
-                            🏠 <span class="hidden md:inline">Trang chủ</span>
-                        </a>
-
-                        <!-- BÁN HÀNG - Dropdown -->
-                        <div class="relative">
-                            <button @click="toggleDropdown('ban-hang')"
-                                class="px-3 py-2 rounded-lg text-white hover:bg-blue-600 transition-all font-medium text-sm flex items-center gap-1">
-                                🛒 <span class="hidden md:inline">Bán hàng</span>
-                                <svg class="w-4 h-4" :class="{'rotate-180': openDropdown === 'ban-hang'}" fill="none"
-                                    stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </button>
-                            <!-- Dropdown Menu -->
-                            <div x-show="openDropdown === 'ban-hang'"
-                                x-transition:enter="transition ease-out duration-100"
-                                x-transition:enter-start="opacity-0 scale-95"
-                                x-transition:enter-end="opacity-100 scale-100"
-                                x-transition:leave="transition ease-in duration-75"
-                                x-transition:leave-start="opacity-100 scale-100"
-                                x-transition:leave-end="opacity-0 scale-95"
-                                class="absolute top-full left-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-slate-200 py-2"
-                                style="display: none;">
-                                <a href="/pos/"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-blue-50 transition-colors">
-                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z">
-                                        </path>
-                                    </svg>
-                                    <div>
-                                        <div class="font-bold text-slate-800 text-sm">Tạo đơn bán</div>
-                                        <div class="text-xs text-slate-500">POS bán hàng</div>
-                                    </div>
-                                </a>
-                                <a href="/hoa-don/"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-blue-50 transition-colors">
-                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
-                                        </path>
-                                    </svg>
-                                    <div>
-                                        <div class="font-bold text-slate-800 text-sm">Danh sách hóa đơn</div>
-                                        <div class="text-xs text-slate-500">Lịch sử đơn bán</div>
-                                    </div>
-                                </a>
-                            </div>
-                        </div>
-
-                        <!-- HOÀN HÀNG - Dropdown -->
-                        <div class="relative">
-                            <button @click="toggleDropdown('hoan-hang')"
-                                class="px-3 py-2 rounded-lg text-white hover:bg-rose-600 transition-all font-medium text-sm flex items-center gap-1">
-                                🔄 <span class="hidden md:inline">Hoàn hàng</span>
-                                <svg class="w-4 h-4" :class="{'rotate-180': openDropdown === 'hoan-hang'}" fill="none"
-                                    stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </button>
-                            <!-- Dropdown Menu -->
-                            <div x-show="openDropdown === 'hoan-hang'"
-                                x-transition:enter="transition ease-out duration-100"
-                                x-transition:enter-start="opacity-0 scale-95"
-                                x-transition:enter-end="opacity-100 scale-100"
-                                x-transition:leave="transition ease-in duration-75"
-                                x-transition:leave-start="opacity-100 scale-100"
-                                x-transition:leave-end="opacity-0 scale-95"
-                                class="absolute top-full left-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-slate-200 py-2"
-                                style="display: none;">
-                                <a href="/pos-hoan/"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-rose-50 transition-colors">
-                                    <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z">
-                                        </path>
-                                    </svg>
-                                    <div>
-                                        <div class="font-bold text-slate-800 text-sm">Tạo đơn hoàn</div>
-                                        <div class="text-xs text-slate-500">Xử lý trả hàng</div>
-                                    </div>
-                                </a>
-                                <a href="/hoa-don-hoan/"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-rose-50 transition-colors">
-                                    <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
-                                        </path>
-                                    </svg>
-                                    <div>
-                                        <div class="font-bold text-slate-800 text-sm">Danh sách đơn hoàn</div>
-                                        <div class="text-xs text-slate-500">Lịch sử hoàn hàng</div>
-                                    </div>
-                                </a>
-                            </div>
-                        </div>
-
-                        <!-- Phiếu thu -->
-                        <a href="{% url 'danh_sach_phieu_thu' %}"
-                            class="px-3 py-2 rounded-lg text-white hover:bg-amber-600 transition-all font-medium text-sm">
-                            💰 <span class="hidden md:inline">Phiếu thu</span>
-                        </a>
-
-                        <!-- Sổ công nợ -->
-                        <a href="{% url 'so_cai_cong_no' %}"
-                            class="px-3 py-2 rounded-lg text-white hover:bg-purple-600 transition-all font-medium text-sm">
-                            📖 <span class="hidden md:inline">Sổ công nợ</span>
-                        </a>
-
-                        <!-- Khách hàng -->
-                        <a href="/customer-manager/"
-                            class="px-3 py-2 rounded-lg text-white hover:bg-cyan-600 transition-all font-medium text-sm">
-                            👥 <span class="hidden md:inline">Khách hàng</span>
-                        </a>
-                    </div>
-                </div>
-
-                <!-- USER INFO + LOGOUT -->
-                <div class="flex items-center gap-3">
-                    <!-- User Info -->
-                    <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5">
-                        <div
-                            class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center font-black text-white text-sm">
-                            {{ request.user.username|slice:":1"|upper }}
-                        </div>
-                        <div class="text-left hidden sm:block">
-                            <div class="text-white text-sm font-bold">{{ request.user.username }}</div>
-                            <div class="text-blue-300 text-xs">
-                                {% if request.user.is_superuser %}👑 Admin
-                                {% elif request.user.groups.all %}{{ request.user.groups.first.name }}
-                                {% else %}User{% endif %}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Logout -->
-                    <form method="POST" action="{% url 'logout' %}">
-                        {% csrf_token %}
-                        <button type="submit"
-                            class="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white font-bold px-3 py-2 rounded-lg transition-all">
-                            🚪 <span class="hidden md:inline">Thoát</span>
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Khoảng trống để content không bị navbar che -->
-    <div class="h-14"></div>
-    <div class="max-w-[99%] mx-auto p-3 grid grid-cols-12 gap-4 h-[calc(100vh-100px)] overflow-hidden">
-        <div class="col-span-12 lg:col-span-9 space-y-3 h-full overflow-y-auto pr-2">
-            <div class="relative bg-white p-3 rounded-2xl shadow-sm border border-rose-200">
-                <!-- Search & Quantity Row -->
-                <div class="flex gap-3">
-                    <!-- Search Input -->
-                    <div class="relative flex-1">
-                        <input type="text" id="search-input" x-model="searchProdQuery"
-                            class="w-full p-4 border-2 border-blue-100 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:outline-none text-xl font-bold transition-all placeholder:text-slate-300"
-                            placeholder="F2: Tìm tên sản phẩm (≥2 ký tự)..." hx-get="/search-sp/"
-                            hx-trigger="keyup[target.value.length >= 2] changed delay:300ms" hx-target="#search-results"
-                            name="q" autocomplete="off">
-                        <div id="search-results" x-show="searchProdQuery.length >= 2"
-                            class="absolute w-full left-0 z-50 bg-white border shadow-2xl rounded-b-2xl mt-2 max-h-96 overflow-y-auto"
-                            @click.away="searchProdQuery = ''"></div>
-                    </div>
-
-                    <!-- Quantity Input -->
-                    <div class="w-40">
-                        <input type="number" x-ref="qtyInput" x-model.number="selectedQty"
-                            class="w-full p-4 border-2 border-emerald-100 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:outline-none text-xl font-bold text-center transition-all"
-                            placeholder="SL" min="1" step="1" @keydown.enter.prevent="addToCart()"
-                            @focus="$event.target.select()">
-                    </div>
-
-                    <!-- Add Button -->
-                    <button @click="addToCart()" :disabled="!selectedProduct"
-                        :class="selectedProduct ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-slate-300 cursor-not-allowed'"
-                        class="px-6 py-4 text-white rounded-xl font-bold text-lg transition-all shadow-sm flex items-center gap-2">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        <span>Thêm</span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-2xl shadow-sm border border-rose-200 overflow-hidden">
-                <table class="w-full text-left border-collapse table-fixed">
-                    <thead class="bg-rose-50 uppercase text-[11px] font-black text-rose-600 border-b tracking-widest">
-                        <tr>
-                            <th class="p-4 w-12 text-center">STT</th>
-                            <th class="p-4 w-2/5">Sản phẩm hoàn / Ghi chú</th>
-                            <th class="p-4 w-32 text-center">SL</th>
-                            <th class="p-4 w-40 text-right">Đơn giá</th>
-                            <th class="p-4 w-20 text-center">CK%</th>
-                            <th class="p-4 w-44 text-right">Thành tiền</th>
-                            <th class="p-4 w-12 text-center"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="text-base font-medium">
-                        <template x-for="(item, index) in cart" :key="item.id">
-                            <tr class="border-b hover:bg-rose-50/50 transition-colors">
-                                <td class="p-4 text-center text-slate-300 font-bold text-xs" x-text="index + 1"></td>
-                                <td class="p-4">
-                                    <div class="font-bold text-slate-800 text-base leading-tight mb-1"
-                                        x-text="item.ten"></div>
-                                    <div class="flex items-center space-x-2">
-                                        <span
-                                            class="text-[9px] bg-rose-100 px-1.5 py-0.5 rounded text-rose-600 font-black uppercase tracking-wider border border-rose-200"
-                                            x-text="item.donvi"></span>
-                                        <input type="text"
-                                            class="text-xs border-b border-dotted border-rose-200 focus:outline-none w-full text-slate-400 italic bg-transparent py-0.5"
-                                            placeholder="Ghi chú SP..." x-model="item.ghichu_sp">
-                                    </div>
-                                </td>
-                                <td class="p-3 text-center">
-                                    <div class="flex items-center justify-center">
-                                        <button
-                                            @click="item.soluong = Math.max(0, parseFloat((parseFloat(item.soluong || 0) - 1).toFixed(2))); calculate()"
-                                            class="w-8 h-10 bg-rose-50 hover:bg-rose-200 text-rose-600 rounded-l-lg font-bold border-y-2 border-l-2 border-rose-100">−</button>
-                                        <input type="text"
-                                            class="w-16 h-10 border-2 border-rose-100 text-center text-xl text-slate-900 outline-none font-inter-num bg-white focus:border-rose-500"
-                                            :value="formatNumber(item.soluong)"
-                                            @input="item.soluong = parseNumber($event.target.value); calculate()"
-                                            @focus="$event.target.select()">
-                                        <button
-                                            @click="item.soluong = parseFloat((parseFloat(item.soluong || 0) + 1).toFixed(2)); calculate()"
-                                            class="w-8 h-10 bg-rose-50 hover:bg-rose-200 text-rose-600 rounded-r-lg font-bold border-y-2 border-r-2 border-rose-100">+</button>
-                                    </div>
-                                </td>
-                                <td class="p-3">
-                                    <input type="text"
-                                        class="w-full border-2 border-rose-100 rounded-lg p-1.5 text-right text-xl text-rose-700 outline-none font-inter-num bg-white focus:border-rose-500"
-                                        :value="formatNumber(item.gia)"
-                                        @input="item.gia = parseNumber($event.target.value); calculate()"
-                                        @focus="$event.target.select()">
-                                </td>
-                                <td class="p-3">
-                                    <div class="relative">
-                                        <input type="text"
-                                            class="w-full border-2 border-rose-100 rounded-lg p-1.5 text-center text-xl text-red-500 outline-none font-inter-num bg-white focus:border-red-400"
-                                            :value="formatNumber(item.ck_item)"
-                                            @input="item.ck_item = parseNumber($event.target.value); calculate()"
-                                            @focus="$event.target.select()">
-                                        <span
-                                            class="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-red-300 pointer-events-none">%</span>
-                                    </div>
-                                </td>
-                                <td class="p-4 text-right text-xl text-rose-900 font-inter-num tracking-tight"
-                                    x-text="formatVND((item.soluong * item.gia) * (1 - (item.ck_item || 0) / 100))">
-                                </td>
-                                <td class="p-4 text-center">
-                                    <button @click="removeItem(index)"
-                                        class="text-slate-200 hover:text-red-500 transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="none"
-                                            viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                                d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-                <template x-if="cart.length === 0">
-                    <div class="p-24 text-center text-rose-200 uppercase font-black tracking-[0.2em] text-sm">
-                        Chưa có sản phẩm hoàn
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        <div class="col-span-12 lg:col-span-3 h-[calc(100vh-80px)] sticky top-2">
-            <div class="flex items-center justify-between mb-3 border-b pb-3 shrink-0">
-                <h2 class="text-lg font-black uppercase text-blue-800 tracking-tighter">
-                    HOÀN HÀNG
-                </h2>
-                <input type="date" x-model="ngayLap"
-                    class="px-3 py-1.5 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none font-semibold text-sm">
-            </div>
-
-            <div class="flex-1 overflow-y-auto pr-1 space-y-3">
-                <div class="mb-4" x-data="{ open: false }">
-                    <label class="block text-[11px] font-black text-slate-400 uppercase mb-2 tracking-widest">Khách
-                        hàng</label>
-                    <div class="relative flex items-center">
-                        <input type="text"
-                            class="w-full p-4 pr-10 border-2 border-rose-50 rounded-2xl bg-rose-50 text-base font-bold shadow-sm focus:border-rose-500 outline-none transition-all"
-                            placeholder="Gõ tên hoặc SĐT..." x-model="searchCust" @click="open = true"
-                            @click.away="open = false" @input="if(searchCust === '') khachhang_id = ''">
-
-                        <button x-show="searchCust.length > 0" @click="searchCust = ''; khachhang_id = ''; open = true"
-                            type="button"
-                            class="absolute right-3 p-1 text-slate-400 hover:text-rose-500 transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20"
-                                fill="currentColor">
-                                <path fill-rule="evenodd"
-                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                                    clip-rule="evenodd" />
-                            </svg>
-                        </button>
-
-                        <div x-show="open && searchCust.length > 0"
-                            class="absolute top-full z-[60] w-full bg-white border shadow-2xl rounded-2xl mt-1 max-h-60 overflow-y-auto">
-                            <template
-                                x-for="kh in customers.filter(c => (c.ten + c.sdt).toLowerCase().includes(searchCust.toLowerCase()))"
-                                :key="kh.id">
-                                <div @click="khachhang_id = kh.id; searchCust = kh.ten; open = false"
-                                    class="p-4 hover:bg-rose-50 cursor-pointer border-b last:border-0 flex justify-between items-center text-sm font-bold">
-                                    <span x-text="kh.ten"></span>
-                                    <span class="text-xs text-slate-400" x-text="kh.sdt"></span>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">Lý do
-                        hoàn</label>
-                    <textarea x-model="ghichu_don"
-                        class="w-full p-2 bg-rose-50 border-2 border-rose-50 rounded-xl text-xs font-medium outline-none"
-                        rows="2" placeholder="Hàng lỗi, sai màu..."></textarea>
-                </div>
-
-                <div class="py-2 border-y border-dashed border-rose-100 space-y-2">
-                    <div class="flex justify-between items-center text-xs">
-                        <span class="text-slate-400 font-bold uppercase">Tiền hàng</span>
-                        <span class="font-bold text-slate-900" x-text="formatVND(subtotal)"></span>
-                    </div>
-                </div>
-
-                <div class="text-center py-2 bg-rose-50 rounded-2xl">
-                    <div class="text-[10px] text-rose-400 uppercase font-black">Tổng tiền hoàn</div>
-                    <div class="text-2xl font-black text-rose-600 tracking-tighter" x-text="formatVND(finalTotal)">
-                    </div>
-                </div>
-            </div>
-
-            <div class="pt-3 space-y-2 shrink-0 bg-white border-t border-dashed mt-2">
-                <button @click="saveInvoiceAction(false)"
-                    class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 rounded-xl text-[12px] uppercase tracking-wider transition-all">
-                    Lưu nháp
-                </button>
-                <button @click="saveInvoiceAction(true)"
-                    class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-5 rounded-xl shadow-md text-[12px] uppercase tracking-wider transition-all">
-                    Lưu & Duyệt
-                </button>
-            </div>
-        </div>
-    </div>
-    </div>
-
-
-</body>
-<script id="customers-data" type="application/json">
-    [
-        {% for kh in khach_hangs %}
-        {
-            "id": "{{ kh.id }}",
-            "ten": "{{ kh.tenkhachhang|escapejs }}",
-            "sdt": "{{ kh.sdt|default:''|escapejs }}"
-        }{% if not forloop.last %},{% endif %}
-        {% endfor %}
-    ]
-    </script>
-
+        unlock(key) { this.locks.delete(key); }
+    }
+    window.submitLock = new SubmitLock();
+</script>
 <script>
     window.formatVND = function (value) {
         if (value === null || value === undefined) return '0';
@@ -678,4 +259,212 @@ Thay thế navbar cũ bằng code này
     });
 </script>
 
-</html>
+<div x-data="posSystem" x-cloak>
+    {% csrf_token %}
+
+    <div class="max-w-[99%] mx-auto p-3 grid grid-cols-12 gap-4 h-[calc(100vh-100px)] overflow-hidden">
+        <div class="col-span-12 lg:col-span-9 space-y-3 h-full overflow-y-auto pr-2">
+            <div class="relative bg-white p-3 rounded-2xl shadow-sm border border-rose-200">
+                <!-- Search & Quantity Row -->
+                <div class="flex gap-3">
+                    <!-- Search Input -->
+                    <div class="relative flex-1">
+                        <input type="text" id="search-input" x-model="searchProdQuery"
+                            class="w-full p-4 border-2 border-blue-100 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:outline-none text-xl font-bold transition-all placeholder:text-slate-300"
+                            placeholder="F2: Tìm tên sản phẩm (≥2 ký tự)..." hx-get="/search-sp/"
+                            hx-trigger="keyup[target.value.length >= 2] changed delay:300ms" hx-target="#search-results"
+                            name="q" autocomplete="off">
+                        <div id="search-results" x-show="searchProdQuery.length >= 2"
+                            class="absolute w-full left-0 z-50 bg-white border shadow-2xl rounded-b-2xl mt-2 max-h-96 overflow-y-auto"
+                            @click.away="searchProdQuery = ''"></div>
+                    </div>
+
+                    <!-- Quantity Input -->
+                    <div class="w-40">
+                        <input type="number" x-ref="qtyInput" x-model.number="selectedQty"
+                            class="w-full p-4 border-2 border-emerald-100 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:outline-none text-xl font-bold text-center transition-all"
+                            placeholder="SL" min="1" step="1" @keydown.enter.prevent="addToCart()"
+                            @focus="$event.target.select()">
+                    </div>
+
+                    <!-- Add Button -->
+                    <button @click="addToCart()" :disabled="!selectedProduct"
+                        :class="selectedProduct ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-slate-300 cursor-not-allowed'"
+                        class="px-6 py-4 text-white rounded-xl font-bold text-lg transition-all shadow-sm flex items-center gap-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span>Thêm</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-rose-200 overflow-hidden">
+                <table class="w-full text-left border-collapse table-fixed">
+                    <thead class="bg-rose-50 uppercase text-[11px] font-black text-rose-600 border-b tracking-widest">
+                        <tr>
+                            <th class="p-4 w-12 text-center">STT</th>
+                            <th class="p-4 w-2/5">Sản phẩm hoàn / Ghi chú</th>
+                            <th class="p-4 w-32 text-center">SL</th>
+                            <th class="p-4 w-40 text-right">Đơn giá</th>
+                            <th class="p-4 w-20 text-center">CK%</th>
+                            <th class="p-4 w-44 text-right">Thành tiền</th>
+                            <th class="p-4 w-12 text-center"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-base font-medium">
+                        <template x-for="(item, index) in cart" :key="item.id">
+                            <tr class="border-b hover:bg-rose-50/50 transition-colors">
+                                <td class="p-4 text-center text-slate-300 font-bold text-xs" x-text="index + 1"></td>
+                                <td class="p-4">
+                                    <div class="font-bold text-slate-800 text-base leading-tight mb-1"
+                                        x-text="item.ten"></div>
+                                    <div class="flex items-center space-x-2">
+                                        <span
+                                            class="text-[9px] bg-rose-100 px-1.5 py-0.5 rounded text-rose-600 font-black uppercase tracking-wider border border-rose-200"
+                                            x-text="item.donvi"></span>
+                                        <input type="text"
+                                            class="text-xs border-b border-dotted border-rose-200 focus:outline-none w-full text-slate-400 italic bg-transparent py-0.5"
+                                            placeholder="Ghi chú SP..." x-model="item.ghichu_sp">
+                                    </div>
+                                </td>
+                                <td class="p-3 text-center">
+                                    <div class="flex items-center justify-center">
+                                        <button
+                                            @click="item.soluong = Math.max(0, parseFloat((parseFloat(item.soluong || 0) - 1).toFixed(2))); calculate()"
+                                            class="w-8 h-10 bg-rose-50 hover:bg-rose-200 text-rose-600 rounded-l-lg font-bold border-y-2 border-l-2 border-rose-100">−</button>
+                                        <input type="text"
+                                            class="w-16 h-10 border-2 border-rose-100 text-center text-xl text-slate-900 outline-none font-inter-num bg-white focus:border-rose-500"
+                                            :value="formatNumber(item.soluong)"
+                                            @input="item.soluong = parseNumber($event.target.value); calculate()"
+                                            @focus="$event.target.select()">
+                                        <button
+                                            @click="item.soluong = parseFloat((parseFloat(item.soluong || 0) + 1).toFixed(2)); calculate()"
+                                            class="w-8 h-10 bg-rose-50 hover:bg-rose-200 text-rose-600 rounded-r-lg font-bold border-y-2 border-r-2 border-rose-100">+</button>
+                                    </div>
+                                </td>
+                                <td class="p-3">
+                                    <input type="text"
+                                        class="w-full border-2 border-rose-100 rounded-lg p-1.5 text-right text-xl text-rose-700 outline-none font-inter-num bg-white focus:border-rose-500"
+                                        :value="formatNumber(item.gia)"
+                                        @input="item.gia = parseNumber($event.target.value); calculate()"
+                                        @focus="$event.target.select()">
+                                </td>
+                                <td class="p-3">
+                                    <div class="relative">
+                                        <input type="text"
+                                            class="w-full border-2 border-rose-100 rounded-lg p-1.5 text-center text-xl text-red-500 outline-none font-inter-num bg-white focus:border-red-400"
+                                            :value="formatNumber(item.ck_item)"
+                                            @input="item.ck_item = parseNumber($event.target.value); calculate()"
+                                            @focus="$event.target.select()">
+                                        <span
+                                            class="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-red-300 pointer-events-none">%</span>
+                                    </div>
+                                </td>
+                                <td class="p-4 text-right text-xl text-rose-900 font-inter-num tracking-tight"
+                                    x-text="formatVND((item.soluong * item.gia) * (1 - (item.ck_item || 0) / 100))">
+                                </td>
+                                <td class="p-4 text-center">
+                                    <button @click="removeItem(index)"
+                                        class="text-slate-200 hover:text-red-500 transition-colors">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="none"
+                                            viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                                d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <template x-if="cart.length === 0">
+                    <div class="p-24 text-center text-rose-200 uppercase font-black tracking-[0.2em] text-sm">
+                        Chưa có sản phẩm hoàn
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <div class="col-span-12 lg:col-span-3 h-[calc(100vh-80px)] sticky top-2">
+            <div class="flex items-center justify-between mb-3 border-b pb-3 shrink-0">
+                <h2 class="text-lg font-black uppercase text-blue-800 tracking-tighter">
+                    HOÀN HÀNG
+                </h2>
+                <input type="date" x-model="ngayLap"
+                    class="px-3 py-1.5 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none font-semibold text-sm">
+            </div>
+
+            <div class="flex-1 overflow-y-auto pr-1 space-y-3">
+                <div class="mb-4" x-data="{ open: false }">
+                    <label class="block text-[11px] font-black text-slate-400 uppercase mb-2 tracking-widest">Khách
+                        hàng</label>
+                    <div class="relative flex items-center">
+                        <input type="text"
+                            class="w-full p-4 pr-10 border-2 border-rose-50 rounded-2xl bg-rose-50 text-base font-bold shadow-sm focus:border-rose-500 outline-none transition-all"
+                            placeholder="Gõ tên hoặc SĐT..." x-model="searchCust" @click="open = true"
+                            @click.away="open = false" @input="if(searchCust === '') khachhang_id = ''">
+
+                        <button x-show="searchCust.length > 0" @click="searchCust = ''; khachhang_id = ''; open = true"
+                            type="button"
+                            class="absolute right-3 p-1 text-slate-400 hover:text-rose-500 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20"
+                                fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                        </button>
+
+                        <div x-show="open && searchCust.length > 0"
+                            class="absolute top-full z-[60] w-full bg-white border shadow-2xl rounded-2xl mt-1 max-h-60 overflow-y-auto">
+                            <template
+                                x-for="kh in customers.filter(c => (c.ten + c.sdt).toLowerCase().includes(searchCust.toLowerCase()))"
+                                :key="kh.id">
+                                <div @click="khachhang_id = kh.id; searchCust = kh.ten; open = false"
+                                    class="p-4 hover:bg-rose-50 cursor-pointer border-b last:border-0 flex justify-between items-center text-sm font-bold">
+                                    <span x-text="kh.ten"></span>
+                                    <span class="text-xs text-slate-400" x-text="kh.sdt"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">Lý do
+                        hoàn</label>
+                    <textarea x-model="ghichu_don"
+                        class="w-full p-2 bg-rose-50 border-2 border-rose-50 rounded-xl text-xs font-medium outline-none"
+                        rows="2" placeholder="Hàng lỗi, sai màu..."></textarea>
+                </div>
+
+                <div class="py-2 border-y border-dashed border-rose-100 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-slate-400 font-bold uppercase">Tiền hàng</span>
+                        <span class="font-bold text-slate-900" x-text="formatVND(subtotal)"></span>
+                    </div>
+                </div>
+
+                <div class="text-center py-2 bg-rose-50 rounded-2xl">
+                    <div class="text-[10px] text-rose-400 uppercase font-black">Tổng tiền hoàn</div>
+                    <div class="text-2xl font-black text-rose-600 tracking-tighter" x-text="formatVND(finalTotal)">
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-3 space-y-2 shrink-0 bg-white border-t border-dashed mt-2">
+                <button @click="saveInvoiceAction(false)"
+                    class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 rounded-xl text-[12px] uppercase tracking-wider transition-all">
+                    Lưu nháp
+                </button>
+                <button @click="saveInvoiceAction(true)"
+                    class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-5 rounded-xl shadow-md text-[12px] uppercase tracking-wider transition-all">
+                    Lưu & Duyệt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

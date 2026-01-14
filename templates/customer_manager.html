@@ -1,31 +1,12 @@
-<!DOCTYPE html>
-<html lang="vi">
+{% extends 'base.html' %}
+{% load static %}
 
-<head>
-    <meta charset="UTF-8">
-    <title>Quản Lý Khách Hàng | Gemini POS</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        [x-cloak] {
-            display: none !important;
-        }
+{% block title %}Quản Lý Khách Hàng | Gemini POS{% endblock %}
 
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-    </style>
-</head>
+{% block content %}
+{% csrf_token %}
 
-<body class="bg-slate-50 min-h-screen" x-data="customerManager()" x-init="init()" x-cloak>
-    <nav class="bg-purple-600 p-4 shadow-lg sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto flex justify-between items-center text-white">
-            <h1 class="text-xl font-black uppercase">👥 Quản Lý Khách Hàng</h1>
-            <div class="text-sm font-semibold">Gemini POS 2026</div>
-        </div>
-    </nav>
-
+<div class="bg-slate-50 min-h-screen" x-data="customerManager()" x-init="init()" x-cloak>
     <div class="max-w-7xl mx-auto p-6 space-y-6">
         <div class="bg-white rounded-xl shadow p-4 flex gap-4 items-center">
             <input type="text" x-model="searchQuery" placeholder="Tìm tên, SĐT, mã khách..."
@@ -218,8 +199,11 @@
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script>
+{% block extra_js %}
+<script>
         function customerManager() {
             return {
                 customers: [], searchQuery: '', filterType: 'all', showModal: false,
@@ -278,7 +262,5 @@
                 formatVND(v) { return new Intl.NumberFormat('vi-VN').format(v || 0) + ' ₫'; }
             }
         }
-    </script>
-</body>
-
-</html>
+</script>
+{% endblock %}
